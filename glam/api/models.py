@@ -286,3 +286,24 @@ class UsageInstrumentation(models.Model):
 
     class Meta:
         db_table = "glam_usage_instrumentation"
+
+class ProbeBuildJob(models.Model):
+    STATUS_SUBMITTED = "SUBMITTED"
+    STATUS_STARTED = "STARTED"
+    STATUS_FAILED = "FAILED"
+    STATUS_SUCCEEDED = "SUCCEEDED"
+
+    STATUSES = [
+        (STATUS_SUBMITTED, "status_submitted"),
+        (STATUS_STARTED, "status_started"),
+        (STATUS_FAILED, "status_failed"),
+        (STATUS_SUCCEEDED, "status_succeeded"),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    probe_name = models.CharField(blank=True, max_length=100)
+    channel = models.CharField(blank=True, max_length=20)
+    process = models.CharField(blank=True, max_length=20)
+    status = models.CharField(max_length=20, choices=STATUSES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+

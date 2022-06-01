@@ -18,5 +18,10 @@ urlpatterns = [
     path("api/v1/probes/random/", api_views.random_probes, name="v1-random-probes"),
     path("api/v1/updates/", api_views.updates, name="v1-updates"),
     path("api/v1/usage/", api_views.usage, name="v1-usage"),
+    path("api/v1/probequery/", api_views.probe_query, name="v1-probequery"),
+    path("api/v1/probejob/", api_views.start_probe_job, name="v1-probe-job"),
+    path("api/v1/probejob/status", api_views.probe_job_status, name="v1-probe-job-status"),
+
+
     re_path(r"^.*$", spa_view, name="index"),
 ]
