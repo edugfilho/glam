@@ -1,10 +1,15 @@
 <script>
   import { fly } from 'svelte/transition';
   import DataError from '../../components/errors/DataError.svelte';
+  import AdHocProbe from '../../components/controls/AdHocProbe.svelte';
   import ProbeTitle from '../../components/regions/ProbeTitle.svelte';
   import Spinner from '../../components/LineSegSpinner.svelte';
   import { dataset, store } from '../../state/store';
   import { isSelectedProcessValid } from '../../utils/probe-utils';
+
+  // TODO: this flag must probably come from the backend or be derived by a response:
+  // e.g. in case a probe doesn't exist in probe dictionary, this should be false.
+  store.setField('request_ad_hoc', true);
 </script>
 
 {#if $store.probe.loaded}
@@ -33,11 +38,22 @@
       <slot {data} probeType={data.viewType} />
     {/if}
   {:catch err}
-    <div class="graphic-body__content">
-      <ProbeTitle />
-      <div in:fly={{ duration: 400, y: 10 }}>
-        <DataError reason={err.message} moreInformation={err.moreInformation} />
+    {#if $store.request_ad_hoc}
+      <div class="graphic-body__content">
+        <ProbeTitle />
+        <div in:fly={{ duration: 400, y: 10 }}>
+          <AdHocProbe />
+        </div>
       </div>
-    </div>
+    {:else}
+      <div class="graphic-body__content">
+        <ProbeTitle />
+        <div in:fly={{ duration: 400, y: 10 }}>
+          <DataError
+            reason={err.message}
+            moreInformation={err.moreInformation} />
+        </div>
+      </div>
+    {/if}
   {/await}
 {/if}

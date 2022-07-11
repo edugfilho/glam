@@ -1,5 +1,6 @@
 const dataURL = '__BASE_DOMAIN__/api/v1/data/';
 const randomProbeURL = '__BASE_DOMAIN__/api/v1/probes/random/';
+const probeJobUrl = '__BASE_DOMAIN__/api/v1/probejob/';
 
 // We could eventually make a constants.js, this is low priority.
 const FETCH_ERROR_MESSAGES = {
@@ -99,6 +100,14 @@ export function getProbeInfo(product, probeName) {
 
   const url = `__GLEAN_DICTIONARY_DOMAIN__/data/${productIds[product]}/metrics/data_${probeName}.json`;
 
+  return fetch(url).then((r) => {
+    if (r.ok) return r.json();
+    return r; // fetch error - send the error object
+  });
+}
+
+export function getAdHocStatus(probeName, channel, process, os) {
+  const url = `${probeJobUrl}status?probe=${probeName}&channel=${channel}&process=${process}&os=${os}`;
   return fetch(url).then((r) => {
     if (r.ok) return r.json();
     return r; // fetch error - send the error object

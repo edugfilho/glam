@@ -305,5 +305,6 @@ class ProbeBuildJob(models.Model):
     channel = models.CharField(blank=True, max_length=20)
     process = models.CharField(blank=True, max_length=20)
     status = models.CharField(max_length=20, choices=STATUSES)
+    details = models.CharField(blank=True, max_length=1000)
     timestamp = models.DateTimeField(auto_now_add=True)
 

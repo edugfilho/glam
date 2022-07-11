@@ -126,7 +126,7 @@ class Base(Core):
     # If we start using the cache for anything heavy, consider using a true
     # cache instead of locmem as default cache. This is mostly a placeholder.
     CACHES = {
-        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+        "default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
         "probe-labels": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "probe-labels",

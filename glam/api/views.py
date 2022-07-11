@@ -35,7 +35,8 @@ from glam.api.query_templates import ad_hoc_probes
 import urllib.request
 import json
 import gzip
-import pprint
+import requests
+import subprocess
 
 
 @api_view(["GET"])
@@ -120,8 +121,8 @@ def get_firefox_aggregations(request, **kwargs):
 
     if "process" in kwargs:
         dimensions.append(Q(process=kwargs["process"]))
-    #result = model.objects.filter(*dimensions)
-    result = dummy_response(kwargs["probe"])
+    result = model.objects.filter(*dimensions)
+    #result = dummy_response(kwargs["probe"])
 
     response = []
 
@@ -516,24 +517,47 @@ def _query_probe_job_status(probe, channel, process):
     dimensions.append(Q(process=process))
     return ProbeBuildJob.objects.filter(*dimensions).order_by("-timestamp").first()
 
+def _get_gcp_creds():
+    # TODO this only works locally. We need a way to do it in the cloud
+    return '{}'.format(subprocess.Popen(args="gcloud auth print-identity-token", stdout=subprocess.PIPE, shell=True).communicate()[0])[2:-3]
+
 @api_view(["POST"])
 @renderer_classes([JSONRenderer])
 def start_probe_job(request):
-    params = request.data["params"]
+    params = request.data
     probe = params["probe"]
     channel = params["channel"]
     process = params["process"]
+    #query = params["query"]
     job = _query_probe_job_status(probe, channel, process)
-    if not job:
+    if not job or job.status == ProbeBuildJob.STATUS_FAILED:
         ProbeBuildJob(
             probe_name=probe,
             channel=channel,
             process=process,
-            status=ProbeBuildJob.STATUS_SUBMITTED
+            status=ProbeBuildJob.STATUS_SUBMITTED,
+            details='GLAM submitted job to ad hoc probe builder'
         ).save()
 
-    # TODO call cloud function with query to be executed and get status. If executing, job.status = started. Else job.status = failed
-    #_log_probe_query(request)
+        query = _probe_query(probe, channel, process, versions=10) #TODO use this for real
+        # token = _get_gcp_creds()
+        url = "http://host.docker.internal:8080"
+        # url = "https://us-central1-moz-fx-data-glam-nonprod-7d0f.cloudfunctions.net/adhoc-probe-builder"
+        #requests.get(url)
+        data = {'query': query, 'probe': probe, 'channel': channel, 'process': process}
+        res = requests.post(url, json = data) #headers={"Authorization": "Bearer {}".format(token)})
+
+
+        if res.status_code != 200:
+            ProbeBuildJob(
+                probe_name=probe,
+                channel=channel,
+                process=process,
+                status=ProbeBuildJob.STATUS_FAILED,
+                details=f'Ad hoc probe builder failed to accept job: status {res.status_code}'
+            ).save()
+
+    #_log_probe_query(request) TODO put this back and find a compatible input
     return HttpResponseRedirect(redirect_to=f'{reverse("v1-probe-job-status")}?probe={probe}&channel={channel}&process={process}')
 
 
@@ -574,24 +598,33 @@ def probe_query(request):
             }
         }
         """
+    request_query = request.data["query"]
+    channel = request_query["channel"]
+    probe = request_query["probe"]
+    process = request_query["process"]
+    versions = request_query["versions"]
+    return _probe_query(probe, channel, process, versions)
+
+def _probe_query(probe, channel, process, versions):
     def snake_case_probe(full_probe_name):
         parts =  full_probe_name.split("/")
         probe_type = parts[0]
         probe_name = parts[1].replace(".", "_").lower()
         return f"{probe_type}/{probe_name}"
 
-    request_query = request.data["query"]
-    #body.get("probename", )
-    channel = request_query["channel"]
-    probe = request_query["probe"]
-    process = request_query["process"]
-    versions = request_query["versions"]
+    if channel not in ["nightly", "beta", "release"]:
+        raise ValidationError(f"Invalid channel: {channel}")
+
+    if process not in ["parent", "content"]:
+        raise ValidationError(f"Invalid process: {process}")
+
     PROBE_INFO_SERVICE = (
         f"https://probeinfo.telemetry.mozilla.org/firefox/{channel}/main/all_probes"
     )
     with urllib.request.urlopen(PROBE_INFO_SERVICE) as url:
         data = json.loads(gzip.decompress(url.read()).decode())
         canonical_probe_names = data.keys()
+        probe_type = None
         for n in canonical_probe_names:
             split_probe_name = snake_case_probe(n).split("/")
             if split_probe_name[1] == probe:
@@ -601,7 +634,7 @@ def probe_query(request):
 
 
         if not probe_type:
-            raise NotFound(f"Probe {probe} not found on probeinfo.telemetry.mozilla.org")
+            raise ValidationError(f"Invalid probe name: {probe}. The specified probe was not found on probeinfo.telemetry.mozilla.org")
         probe_search = canonical_probe_name
         data_details = data[probe_search]["history"][channel][0]["details"]
         metric_type = data_details["kind"]
@@ -627,7 +660,7 @@ def probe_query(request):
     q_params.update(bucket_details)
 
     query_str = ad_hoc_probes.query(probe_type, q_params)
-    return Response({"query": query_str.replace("\n", " ")}) #todo remove \" from query and find a way to format it if you want to keep comments. I think os filter is necessary
+    return query_str.replace("\n", " ") #todo remove \" from query and find a way to format it if you want to keep comments. I think os filter is necessary
 
 def dummy_response(probe_name):
     raw_data = {
